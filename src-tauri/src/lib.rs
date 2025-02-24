@@ -1,4 +1,5 @@
 use serde_json::json;
+use std::sync::Arc;
 use sysinfo::System;
 use tauri::{Emitter, Manager};
 
@@ -8,27 +9,44 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
-// 自动启动的核心实现
-fn auto_start_monitoring(app: &tauri::AppHandle) {
+fn auto_start_monitoring(app_handle: tauri::AppHandle) {
     std::thread::spawn(move || {
         let mut sys = System::new_all();
+
         // 获取窗口实例，假设你有一个名为 "main" 的窗口
-        if let Some(window) = app.get_webview_window("main") {
+        if let Some(window) = app_handle.get_webview_window("main") {
             loop {
-                // 在后台线程中执行某些操作，然后向前端发送事件
-                sys.refresh_cpu_usage(); // Refreshing CPU usage.
+                // 刷新数据
+                sys.refresh_all();
+
+                let mut cpus = vec![];
+
                 for cpu in sys.cpus() {
-                    window
-                        // .emit("system_stats", {
-                        //     "data":"cpu数据",
-                        // })
-                        .expect("Failed to emit event");
-                    print!("{}% ", cpu.cpu_usage());
+                    let cpu_usage = cpu.cpu_usage();
+                    let frequency = cpu.frequency();
+                    let name = cpu.name();
+                    let vendor_id = cpu.vendor_id();
+                    let brand = cpu.brand();
+                    cpus.push(json!({
+                        "cpu_usage":cpu_usage,
+                        "frequency":frequency,
+                        "name":name,
+                        "vendor_id":vendor_id,
+                        "brand":brand
+                    }));
                 }
 
-                std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
+                app_handle
+                    .emit(
+                        "system_stats",
+                        json!({
+                            "cpus":cpus
+                        }),
+                    )
+                    .expect("事件传输失败");
 
-                // std::thread::sleep(std::time::Duration::from_secs(1)); // 控制发送频率
+                // 控制发送频率
+                std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
             }
         }
     });
@@ -39,7 +57,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_opener::init())
-        .setup(|app| Ok(()))
+        .setup(|app| {
+            let app_handle = app.app_handle().clone();
+            auto_start_monitoring(app_handle);
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![greet])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
