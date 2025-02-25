@@ -1,4 +1,4 @@
-use serde_json::json;
+use serde_json::{json, Value};
 use std::sync::Arc;
 use sysinfo::System;
 use tauri::{Emitter, Manager};
@@ -14,13 +14,14 @@ fn auto_start_monitoring(app_handle: tauri::AppHandle) {
         let mut sys = System::new_all();
 
         // 获取窗口实例，假设你有一个名为 "main" 的窗口
-        if let Some(window) = app_handle.get_webview_window("main") {
+        if let Some(_window) = app_handle.get_webview_window("main") {
             loop {
                 // 刷新数据
                 sys.refresh_all();
 
                 let mut cpus = vec![];
 
+                // 获取cpu信息
                 for cpu in sys.cpus() {
                     let cpu_usage = cpu.cpu_usage();
                     let frequency = cpu.frequency();
@@ -36,11 +37,18 @@ fn auto_start_monitoring(app_handle: tauri::AppHandle) {
                     }));
                 }
 
+                // 获取内存信息
+                let memroy = json!({
+                    "total_memory":sys.total_memory(),
+                    "used_memory":sys.used_memory()
+                });
+
                 app_handle
                     .emit(
                         "system_stats",
                         json!({
-                            "cpus":cpus
+                            "cpus":cpus,
+                            "memroy":memroy
                         }),
                     )
                     .expect("事件传输失败");

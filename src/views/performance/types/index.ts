@@ -1,5 +1,6 @@
 export interface SysInfo {
   cpus: CpuInfo[];
+  memory: MemoryInfo;
 }
 
 export interface CpuInfo {
@@ -8,4 +9,9 @@ export interface CpuInfo {
   frequency: number;
   name: string;
   vendor_id: string;
+}
+
+export interface MemoryInfo {
+  total_memory: number;
+  used_memory: number;
 }
